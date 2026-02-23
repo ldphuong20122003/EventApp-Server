@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
+const asyncHandler = require("express-async-handler");
 const { JWT_SECRET } = require("../middlewares/authMiddleware");
 
 // Thời hạn token: 7 ngày
@@ -19,7 +20,7 @@ const authControler = {
   /**
    * POST /auth/register - Đăng ký tài khoản mới
    */
-  register: async (req, res) => {
+  register: asyncHandler(async (req, res) => {
     try {
       const { email, password, fullName } = req.body;
 
@@ -84,12 +85,12 @@ const authControler = {
         message: "Lỗi server khi đăng ký",
       });
     }
-  },
+  }),
 
   /**
    * POST /auth/login - Đăng nhập
    */
-  login: async (req, res) => {
+  login: asyncHandler(async (req, res) => {
     try {
       const { email, password } = req.body;
 
@@ -138,7 +139,7 @@ const authControler = {
         message: "Lỗi server khi đăng nhập",
       });
     }
-  },
+  }),
 
   /**
    * GET /auth/me - Lấy thông tin user hiện tại (cần gửi kèm token)
