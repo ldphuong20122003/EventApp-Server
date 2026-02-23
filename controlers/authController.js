@@ -2,11 +2,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
 const asyncHandler = require("express-async-handler");
+const { sendOtpEmail } = require("../utils/sendEmail");
 const { JWT_SECRET } = require("../middlewares/authMiddleware");
-
-// Thời hạn token: 7 ngày
+const { generateOtp, verifyAndConsumeOtp, setPending } = require("../utils/otpStore");
 const TOKEN_EXPIRES = "7d";
-
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const sanitizeUser = (user) => {
@@ -16,7 +15,11 @@ const sanitizeUser = (user) => {
   return rest;
 };
 
-const authControler = {
+const generateToken = (userId, email) => {
+  return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: TOKEN_EXPIRES });
+};
+
+const authController = {
   /**
    * POST /auth/register - Đăng ký tài khoản mới
    */
@@ -62,20 +65,15 @@ const authControler = {
       });
 
       await newUser.save();
+      setPending(email, { hashedPassword, fullName });
 
-      const token = jwt.sign(
-        { userId: newUser._id.toString(), email: newUser.email },
-        JWT_SECRET,
-        { expiresIn: TOKEN_EXPIRES }
-      );
+      const token = generateToken(newUser._id.toString(), newUser.email);
 
       return res.status(201).json({
         success: true,
         message: "Đăng ký thành công",
         data: {
-          user: sanitizeUser(newUser),
           token,
-          expiresIn: TOKEN_EXPIRES,
         },
       });
     } catch (err) {
@@ -117,19 +115,13 @@ const authControler = {
         });
       }
 
-      const token = jwt.sign(
-        { userId: user._id.toString(), email: user.email },
-        JWT_SECRET,
-        { expiresIn: TOKEN_EXPIRES }
-      );
+      const token = generateToken(user._id.toString(), user.email);
 
       return res.json({
         success: true,
         message: "Đăng nhập thành công",
         data: {
-          user: sanitizeUser(user),
           token,
-          expiresIn: TOKEN_EXPIRES,
         },
       });
     } catch (err) {
@@ -142,57 +134,83 @@ const authControler = {
   }),
 
   /**
-   * GET /auth/me - Lấy thông tin user hiện tại (cần gửi kèm token)
+   * POST /auth/send-otp - Gửi mã OTP đến email
    */
-  getProfile: async (req, res) => {
+  sendOtp: asyncHandler(async (req, res) => {
     try {
-      // Lấy token từ header Authorization: Bearer <token>
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({
           success: false,
-          message: "Token không hợp lệ hoặc thiếu token",
+          message: "Email không được để trống",
         });
       }
-
-      const token = authHeader.split(" ")[1];
-      if (!token) {
-        return res.status(401).json({
+      if (!validateEmail(email)) {
+        return res.status(400).json({
           success: false,
-          message: "Token không hợp lệ hoặc thiếu token",
+          message: "Email không hợp lệ",
         });
       }
-
-      // Xác thực token
-      const decoded = jwt.verify(token, JWT_SECRET);
-      if (!decoded || !decoded.userId) {
-        return res.status(401).json({
-          success: false,
-          message: "Token không hợp lệ",
-        });
-      }
-
-      // Tìm người dùng dựa vào userId trong token
-      const user = await User.findById(decoded.userId);
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy người dùng",
-        });
-      }
-
+      const otp = generateOtp();
+      setPending(email, { otp });
+      await sendOtpEmail(email, otp);
       return res.json({
         success: true,
-        data: { user: sanitizeUser(user) },
+        message: "Mã xác thực đã được gửi đến email",
       });
     } catch (err) {
-      console.error("Get profile by token error:", err);
-      return res.status(401).json({
+      console.error("Verification error:", err);
+      return res.status(500).json({
         success: false,
-        message: "Token không hợp lệ hoặc đã hết hạn",
+        message: "Lỗi server khi xác thực",
       });
     }
-  },
+  }),
+
+  /**
+   * POST /auth/verify-otp - Xác thực OTP
+   */
+  verifyOtp: asyncHandler(async (req, res) => {
+    try {
+      const { email, otp } = req.body;
+      if (!email || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: "Email và OTP không được để trống",
+        });
+      }
+      if (!validateEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Email không hợp lệ",
+        });
+      }
+      if (otp.length !== 6) {
+        return res.status(400).json({
+          success: false,
+          message: "OTP phải có 6 số",
+        });
+      }
+      const result = verifyAndConsumeOtp(email, otp);
+      if (!result.valid) {
+        return res.status(400).json({
+          success: false,
+          message: result.message,
+        });
+      }
+      return res.json({
+        success: true,
+        message: "OTP xác thực thành công",
+      });
+    } catch (err) {
+      console.error("Verify OTP error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi xác thực OTP",
+      });
+    }
+  }),
+
 };
 
-module.exports = authControler;
+module.exports = authController;
