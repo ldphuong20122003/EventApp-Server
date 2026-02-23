@@ -10,6 +10,10 @@ authRouter.post("/register", authControler.register);
 // Đăng nhập
 authRouter.post("/login", authControler.login);
 
+// Xác thực
+authRouter.post("/send-otp", authControler.sendOtp);
+
+
 // Lấy thông tin user hiện tại (yêu cầu đăng nhập)
 authRouter.get("/me", authenticateToken, authControler.getProfile);
 
