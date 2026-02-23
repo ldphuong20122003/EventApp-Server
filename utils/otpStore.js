@@ -1,6 +1,6 @@
 /**
- * Lưu đăng ký chờ xác thực OTP (in-memory).
- * Key: email (lowercase), value: { hashedPassword, fullName, otp, expiresAt }
+ * Lưu OTP chờ xác thực (in-memory).
+ * Key: email (lowercase), value: { otp, expiresAt, ...data }
  */
 const pendingRegistrations = new Map();
 
@@ -26,16 +26,23 @@ function getPending(email) {
 function verifyAndConsumeOtp(email, otp) {
   const key = email.trim().toLowerCase();
   const pending = pendingRegistrations.get(key);
-  if (!pending) return { valid: false, message: "Không tìm thấy yêu cầu đăng ký. Vui lòng gửi lại OTP." };
+  if (!pending)
+    return {
+      valid: false,
+      message: "Không tìm thấy yêu cầu gửi OTP. Vui lòng yêu cầu lại mã.",
+    };
   if (Date.now() > pending.expiresAt) {
     pendingRegistrations.delete(key);
-    return { valid: false, message: "Mã OTP đã hết hạn. Vui lòng đăng ký lại." };
+    return {
+      valid: false,
+      message: "Mã OTP đã hết hạn. Vui lòng yêu cầu lại mã.",
+    };
   }
   if (pending.otp !== String(otp).trim()) {
     return { valid: false, message: "Mã OTP không đúng." };
   }
   pendingRegistrations.delete(key);
-  return { valid: true, data: { hashedPassword: pending.hashedPassword, fullName: pending.fullName } };
+  return { valid: true };
 }
 
 module.exports = {
