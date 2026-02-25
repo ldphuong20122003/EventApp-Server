@@ -8,13 +8,6 @@ const { generateOtp, verifyAndConsumeOtp, setPending } = require("../utils/otpSt
 const TOKEN_EXPIRES = "7d";
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-const sanitizeUser = (user) => {
-  if (!user) return null;
-  const obj = user.toObject ? user.toObject() : user;
-  const { password, ...rest } = obj;
-  return rest;
-};
-
 const generateToken = (userId, email) => {
   return jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: TOKEN_EXPIRES });
 };
