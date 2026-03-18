@@ -12,9 +12,9 @@ app.use(cors());
 
 const PORT = 3000;
 
-app.use("/auth", authRouter);
-app.use("/user", userRouter);
-app.use("/tasks", taskRouter);
+app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/user", userRouter);
+app.use("/api/v1/tasks", taskRouter);
 
 connectDb();
 
