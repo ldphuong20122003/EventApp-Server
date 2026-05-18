@@ -1,5 +1,7 @@
 const asyncHandler = require("express-async-handler");
 const bcrypt = require("bcryptjs");
+const fs = require("fs");
+const path = require("path");
 const User = require("../models/userModel");
 
 const sanitizeUser = (user) => {
@@ -48,11 +50,50 @@ const userController = {
   }),
 
   /**
+   * GET /user/list - Lấy danh sách user đang sử dụng app
+   * Query: q (optional) - tìm theo fullName/email
+   */
+  getUsers: asyncHandler(async (req, res) => {
+    const requesterId = req.user && req.user.userId;
+    if (!requesterId) {
+      return res.status(401).json({
+        success: false,
+        message: "Token không hợp lệ",
+      });
+    }
+
+    const keyword = String(req.query?.q || "").trim();
+    const query = {};
+    if (keyword) {
+      query.$or = [
+        { fullName: { $regex: keyword, $options: "i" } },
+        { email: { $regex: keyword, $options: "i" } },
+      ];
+    }
+
+    const users = await User.find(query)
+      .select("_id fullName email")
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      message: "Lấy danh sách user thành công",
+      data: {
+        users: users.map((user) => ({
+          userId: String(user._id),
+          fullName: user.fullName || "",
+          email: user.email || "",
+        })),
+      },
+    });
+  }),
+
+  /**
    * PUT /user/update-profile - Cập nhật thông tin user (fullName, email)
    */
   updateProfile: asyncHandler(async (req, res) => {
     try {
-      const { fullName, email } = req.body;
+      const { fullName, email, address } = req.body;
 
       const userId = req.user && req.user.userId;
       if (!userId) {
@@ -98,6 +139,10 @@ const userController = {
         user.fullName = fullName ? fullName.trim() : null;
       }
 
+      if (address !== undefined) {
+        user.address = address ? String(address).trim() : "";
+      }
+
       await user.save();
 
       return res.json({
@@ -110,6 +155,57 @@ const userController = {
       return res.status(500).json({
         success: false,
         message: "Lỗi server khi cập nhật thông tin người dùng",
+      });
+    }
+  }),
+
+  /**
+   * POST /user/avatar - Upload ảnh đại diện (multipart field: avatar)
+   */
+  uploadAvatar: asyncHandler(async (req, res) => {
+    try {
+      const userId = req.user && req.user.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "Token không hợp lệ",
+        });
+      }
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng gửi file ảnh (avatar)",
+        });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy người dùng",
+        });
+      }
+
+      const oldUrl = user.imageUrl;
+      if (oldUrl && typeof oldUrl === "string" && oldUrl.startsWith("/uploads/avatars/")) {
+        const abs = path.join(__dirname, "..", oldUrl.replace(/^\//, ""));
+        fs.unlink(abs, () => {});
+      }
+
+      const relativePath = `/uploads/avatars/${req.file.filename}`;
+      user.imageUrl = relativePath;
+      await user.save();
+
+      return res.json({
+        success: true,
+        message: "Cập nhật ảnh đại diện thành công",
+        data: { user: sanitizeUser(user) },
+      });
+    } catch (err) {
+      console.error("Upload avatar error:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi server khi tải ảnh lên",
       });
     }
   }),

@@ -33,6 +33,14 @@ const taskSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+  assignees: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    default: [],
+  },
+  completedAt: {
+    type: Date,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -45,6 +53,29 @@ const taskSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  comments: [
+    {
+      author: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      text: {
+        type: String,
+        trim: true,
+        maxlength: 2000,
+        default: "",
+      },
+      imageUrl: {
+        type: String,
+        default: "",
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
 });
 
 taskSchema.pre("save", function () {

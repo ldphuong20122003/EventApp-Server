@@ -1,5 +1,6 @@
 const Router = require("express");
 const { authenticateToken } = require("../middlewares/authMiddleware");
+const uploadTaskComment = require("../middlewares/uploadTaskCommentMiddleware");
 const taskController = require("../controllers/taskController");
 
 const taskRouter = Router();
@@ -21,6 +22,14 @@ taskRouter.delete("/:id", authenticateToken, taskController.deleteTask);
 
 // Cập nhật công việc
 taskRouter.put("/:id", authenticateToken, taskController.updateTask);
+taskRouter.post(
+  "/:id/comments",
+  authenticateToken,
+  uploadTaskComment.single("image"),
+  taskController.addTaskComment,
+);
+taskRouter.put("/:id/restore", authenticateToken, taskController.restoreTask);
+taskRouter.put("/:id/assign", authenticateToken, taskController.assignTask);
 
 module.exports = taskRouter;    
 
